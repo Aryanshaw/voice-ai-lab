@@ -1,4 +1,4 @@
-# tvaram — Monorepo
+# Fullstack setup — Monorepo
 
 - **api/** — FastAPI backend with async PostgreSQL (SQLAlchemy + Alembic)
 - **client/** — Next.js frontend (App Router, Tailwind v4, Aceternity UI)
