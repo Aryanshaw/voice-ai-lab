@@ -20,6 +20,10 @@ interface ConfigGridProps {
 export function ConfigGrid({ configs, loading, onDelete }: ConfigGridProps) {
   const router = useRouter();
 
+  const handleCreateNew = () => {
+    router.push('/configs/new');
+  };
+
   // ── Loading state: three placeholder cards ────────────────────────────────
   if (loading) {
     return (
@@ -57,8 +61,8 @@ export function ConfigGrid({ configs, loading, onDelete }: ConfigGridProps) {
         </p>
         <Button
           size="sm"
-          className="mt-4 gap-1.5 text-xs"
-          onClick={() => router.push('/configs/new')}
+          className="mt-4 gap-1.5 text-xs cursor-pointer"
+          onClick={handleCreateNew}
         >
           <PlusIcon className="size-3.5" />
           New Agent

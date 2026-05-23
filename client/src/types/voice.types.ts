@@ -1,4 +1,9 @@
-// ── Voice types for ElevenLabs integration ───────────────────────────────
+// ── Voice + ElevenLabs model types ───────────────────────────────────────
+
+export interface ELModel {
+  id: string;
+  label: string;
+}
 
 export interface VoiceLabel {
   gender: string | null;

@@ -24,7 +24,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useLLMModels } from '@/hooks/useLLMModels';
+import { useElevenLabsModels } from '@/hooks/useElevenLabsModels';
 import { VoicePicker } from './VoicePicker';
+import ReactMarkdown from 'react-markdown';
+import { cn } from '@/utils/utils';
 import type { ConfigCreate } from '@/types/config.types';
 
 // ── Defaults ──────────────────────────────────────────────────────────────────
@@ -42,12 +45,6 @@ const DEFAULT_FORM: ConfigCreate = {
   },
 };
 
-const ELEVENLABS_MODELS = [
-  { id: 'eleven_turbo_v2',        label: 'Turbo v2 (fastest)' },
-  { id: 'eleven_turbo_v2_5',      label: 'Turbo v2.5' },
-  { id: 'eleven_multilingual_v2', label: 'Multilingual v2' },
-  { id: 'eleven_monolingual_v1',  label: 'Monolingual v1' },
-];
 
 interface AgentConfigEditorProps {
   defaultValues?: Partial<ConfigCreate>;
@@ -73,6 +70,8 @@ export function AgentConfigEditor({
 }: AgentConfigEditorProps) {
   const router = useRouter();
   const { data: modelsMap = {} } = useLLMModels();
+  const { data: elModels = [] } = useElevenLabsModels();
+  const [viewMode, setViewMode] = useState<'edit' | 'preview'>('edit');
 
   const [form, setForm] = useState<ConfigCreate>({
     ...DEFAULT_FORM,
@@ -104,12 +103,12 @@ export function AgentConfigEditor({
     <form onSubmit={handleSubmit} className="flex flex-1 flex-col overflow-hidden">
 
       {/* Header */}
-      <div className="flex shrink-0 items-center gap-3 border-b border-border px-6 py-3.5">
+      <div className="flex shrink-0 items-center gap-3 border-b border-border px-6 py-3">
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="size-7"
+          className="size-7 cursor-pointer"
           onClick={() => router.push('/configs')}
         >
           <ArrowLeftIcon className="size-4" />
@@ -158,19 +157,59 @@ export function AgentConfigEditor({
           <div className="flex min-h-0 flex-1 flex-col gap-1.5">
             <div className="flex items-center justify-between">
               <Label htmlFor="system_prompt" className="text-sm">System Prompt</Label>
-              <Badge variant="outline" className="text-[10px]">Markdown</Badge>
+              <div className="flex bg-muted p-0.5 rounded-md">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('edit')}
+                  className={cn("px-2 py-1 text-[10px] rounded-sm font-medium transition-colors cursor-pointer", viewMode === 'edit' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('preview')}
+                  className={cn("px-2 py-1 text-[10px] rounded-sm font-medium transition-colors cursor-pointer", viewMode === 'preview' ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}
+                >
+                  Preview
+                </button>
+              </div>
             </div>
-            <Textarea
-              id="system_prompt"
-              placeholder={"You are a helpful support agent.\n\nRespond concisely and professionally."}
-              // h-full fills the flex parent so textarea grows with the column
-              className="h-full min-h-[200px] resize-none font-mono text-xs leading-relaxed"
-              value={form.system_prompt}
-              onChange={(e) => patch({ system_prompt: e.target.value })}
-              required
-            />
+            
+            {viewMode === 'edit' ? (
+              <Textarea
+                id="system_prompt"
+                placeholder={"You are a helpful support agent.\n\nRespond concisely and professionally."}
+                // h-full fills the flex parent so textarea grows with the column
+                className="h-full min-h-[200px] resize-none font-mono text-xs leading-relaxed"
+                value={form.system_prompt}
+                onChange={(e) => patch({ system_prompt: e.target.value })}
+                required
+              />
+            ) : (
+              <div className="h-full min-h-[200px] overflow-y-auto rounded-md border border-border bg-muted/30 p-3 text-xs">
+                <ReactMarkdown
+                  components={{
+                    h1: ({node, ...props}) => <h1 className="text-lg font-bold mt-4 mb-2" {...props} />,
+                    h2: ({node, ...props}) => <h2 className="text-md font-bold mt-4 mb-2" {...props} />,
+                    h3: ({node, ...props}) => <h3 className="text-sm font-bold mt-3 mb-2" {...props} />,
+                    p: ({node, ...props}) => <p className="mb-2 leading-relaxed" {...props} />,
+                    ul: ({node, ...props}) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
+                    ol: ({node, ...props}) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
+                    li: ({node, ...props}) => <li className="" {...props} />,
+                    strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
+                    em: ({node, ...props}) => <em className="italic" {...props} />,
+                    pre: ({node, ...props}) => <pre className="bg-background border p-2 rounded-md overflow-x-auto mb-2" {...props} />,
+                    code: ({node, className, ...props}) => <code className={cn("font-mono text-[10px]", !className?.includes('language-') && "bg-background border px-1 py-0.5 rounded-sm", className)} {...props} />,
+                    blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-primary pl-3 italic text-muted-foreground mb-2" {...props} />
+                  }}
+                >
+                  {form.system_prompt || '*No prompt provided*'}
+                </ReactMarkdown>
+              </div>
+            )}
+            
             <p className="text-xs text-muted-foreground">
-              Injected as system message. Markdown supported.
+              {viewMode === 'edit' ? 'Injected as system message. Markdown supported.' : 'Preview of the system message rendering.'}
             </p>
           </div>
         </div>
@@ -257,7 +296,7 @@ export function AgentConfigEditor({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {ELEVENLABS_MODELS.map((m) => (
+                  {elModels.map((m) => (
                     <SelectItem key={m.id} value={m.id} className="text-xs">
                       {m.label}
                     </SelectItem>
@@ -305,12 +344,13 @@ export function AgentConfigEditor({
           type="button"
           variant="outline"
           size="sm"
+          className="cursor-pointer"
           onClick={() => router.push('/configs')}
           disabled={isSubmitting}
         >
           Cancel
         </Button>
-        <Button type="submit" size="sm" disabled={isSubmitting}>
+        <Button type="submit" size="sm" className="cursor-pointer" disabled={isSubmitting}>
           {isSubmitting ? 'Saving…' : 'Save Agent'}
         </Button>
       </div>

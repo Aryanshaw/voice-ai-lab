@@ -5,7 +5,7 @@
 // Selected: blue border + blue tinted background.
 // Play button: inside card div (never nested button-in-button).
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { PlayIcon, SquareIcon, CheckIcon } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/utils/utils';
@@ -22,31 +22,15 @@ function VoiceCard({
   voice,
   selected,
   onSelect,
+  playing,
+  onTogglePlay,
 }: {
   voice: Voice;
   selected: boolean;
   onSelect: () => void;
+  playing: boolean;
+  onTogglePlay: (e: React.MouseEvent) => void;
 }) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playing, setPlaying] = useState(false);
-
-  function handlePreview(e: React.MouseEvent) {
-    e.stopPropagation();
-    if (playing) {
-      audioRef.current?.pause();
-      setPlaying(false);
-      return;
-    }
-    if (!voice.preview_url) return;
-    if (!audioRef.current) {
-      audioRef.current = new Audio(voice.preview_url);
-      audioRef.current.onended = () => setPlaying(false);
-    }
-    audioRef.current.currentTime = 0;
-    audioRef.current.play();
-    setPlaying(true);
-  }
-
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -123,13 +107,15 @@ function VoiceCard({
       {voice.preview_url && (
         <button
           type="button"
-          onClick={handlePreview}
+          onClick={onTogglePlay}
           title={playing ? 'Stop preview' : 'Play preview'}
           className={cn(
-            'absolute bottom-2.5 right-2.5 flex size-6 items-center justify-center rounded-sm border transition-colors',
-            selected
-              ? 'border-blue-400 text-blue-400 hover:bg-blue-500/20'
-              : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
+            'absolute bottom-2.5 right-2.5 flex size-6 items-center justify-center rounded-sm border transition-colors cursor-pointer',
+            playing
+              ? 'border-blue-500 bg-blue-500 text-white hover:bg-blue-600 hover:border-blue-600'
+              : selected
+                ? 'border-blue-400 text-blue-400 hover:bg-blue-500/20'
+                : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'
           )}
         >
           {playing ? <SquareIcon className="size-2.5" /> : <PlayIcon className="size-2.5" />}
@@ -160,6 +146,35 @@ function VoicePickerSkeleton() {
 // ── VoicePicker ────────────────────────────────────────────────────────────────
 export function VoicePicker({ value, onChange }: VoicePickerProps) {
   const { data: voices = [], isLoading, isError } = useVoices();
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Clean up audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, []);
+
+  const togglePlay = (voiceId: string, url: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (playingId === voiceId) {
+      // Pause current
+      audioRef.current?.pause();
+      setPlayingId(null);
+    } else {
+      // Pause previous if exists
+      audioRef.current?.pause();
+      // Play new
+      const audio = new Audio(url);
+      audio.onended = () => setPlayingId(null);
+      audio.play();
+      audioRef.current = audio;
+      setPlayingId(voiceId);
+    }
+  };
 
   if (isLoading) return <VoicePickerSkeleton />;
 
@@ -183,6 +198,8 @@ export function VoicePicker({ value, onChange }: VoicePickerProps) {
           voice={voice}
           selected={voice.voice_id === value}
           onSelect={() => onChange(voice.voice_id)}
+          playing={playingId === voice.voice_id}
+          onTogglePlay={(e) => togglePlay(voice.voice_id, voice.preview_url!, e)}
         />
       ))}
     </div>

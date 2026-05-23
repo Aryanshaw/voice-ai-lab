@@ -33,7 +33,7 @@ function NavItem({
 }: {
   href: string;
   label: string;
-  icon: React.ElementType;
+  icon: React.ComponentType<{ className?: string }>;
   active: boolean;
   collapsed: boolean;
 }) {
@@ -98,7 +98,7 @@ export function AppSidebar() {
           type="button"
           onClick={toggleSidebar}
           title={sidebarCollapsed ? 'Expand sidebar (⌘B)' : 'Collapse sidebar (⌘B)'}
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground cursor-pointer"
         >
           {sidebarCollapsed
             ? <PanelLeftOpenIcon className="size-4" />
@@ -123,7 +123,7 @@ export function AppSidebar() {
       {/* Footer */}
       <div
         className={cn(
-          'flex shrink-0 items-center border-t border-border py-3',
+          'flex shrink-0 items-center border-t border-border py-3.5',
           sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-3'
         )}
       >

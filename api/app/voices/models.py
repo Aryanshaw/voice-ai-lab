@@ -1,4 +1,4 @@
-"""Voices — Pydantic schemas for ElevenLabs voice data."""
+"""Voices — Pydantic schemas for ElevenLabs voice and model data."""
 
 from pydantic import BaseModel
 
@@ -17,3 +17,8 @@ class VoiceItem(BaseModel):
     category: str
     preview_url: str | None
     labels: VoiceLabel
+
+
+class ELModel(BaseModel):
+    id: str    # ElevenLabs model_id
+    label: str

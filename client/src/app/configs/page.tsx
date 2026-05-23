@@ -14,6 +14,14 @@ export default function ConfigsPage() {
   const { data: configs = [], isLoading } = useConfigs();
   const deleteConfig = useDeleteConfig();
 
+  const handleCreateNew = () => {
+    router.push('/configs/new');
+  };
+
+  const handleDelete = (id: string) => {
+    deleteConfig.mutate(id);
+  };
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-7xl px-4 py-6">
@@ -25,8 +33,8 @@ export default function ConfigsPage() {
           </div>
           <Button
             size="sm"
-            className="gap-1.5 text-xs"
-            onClick={() => router.push('/configs/new')}
+            className="gap-1.5 text-xs cursor-pointer"
+            onClick={handleCreateNew}
           >
             <PlusIcon className="size-3.5" /> New Agent
           </Button>
@@ -36,7 +44,7 @@ export default function ConfigsPage() {
         <ConfigGrid
           configs={configs}
           loading={isLoading}
-          onDelete={(id) => deleteConfig.mutate(id)}
+          onDelete={handleDelete}
         />
       </div>
     </div>

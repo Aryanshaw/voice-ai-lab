@@ -18,6 +18,9 @@ interface ConfigCardProps {
 export function ConfigCard({ config, onDelete }: ConfigCardProps) {
   const router = useRouter();
 
+  const handleEdit = () => router.push(`/configs/${config.id}/edit`);
+  const handleDelete = () => onDelete(config.id);
+
   // model is stored as "provider/model_id" — split for badge display
   const [provider, model] = config.model.split('/');
 
@@ -44,8 +47,8 @@ export function ConfigCard({ config, onDelete }: ConfigCardProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="size-7"
-            onClick={() => router.push(`/configs/${config.id}/edit`)}
+            className="size-7 cursor-pointer"
+            onClick={handleEdit}
             title="Edit agent"
           >
             <PencilIcon className="size-3.5" />
@@ -53,8 +56,8 @@ export function ConfigCard({ config, onDelete }: ConfigCardProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="size-7 hover:text-destructive"
-            onClick={() => onDelete(config.id)}
+            className="size-7 hover:text-destructive cursor-pointer"
+            onClick={handleDelete}
             title="Delete agent"
           >
             <TrashIcon className="size-3.5" />
@@ -77,7 +80,7 @@ export function ConfigCard({ config, onDelete }: ConfigCardProps) {
 
       {/* Start session — disabled until Phase 2 */}
       <div className="mt-3">
-        <Button size="sm" className="h-7 w-full gap-1.5 text-xs" disabled>
+        <Button size="sm" className="h-7 w-full gap-1.5 text-xs cursor-pointer" disabled>
           <PlayIcon className="size-3" />
           Start Session
         </Button>
