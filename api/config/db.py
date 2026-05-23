@@ -1,17 +1,14 @@
-"""Async PostgreSQL database setup using SQLAlchemy."""
+"""Async PostgreSQL database setup — singleton pattern."""
 
-import os
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, ClassVar
 
-from dotenv import load_dotenv
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
 from config.logger import get_logger
 
-load_dotenv()
 logger = get_logger(__name__)
 
 
@@ -20,28 +17,36 @@ class Base(DeclarativeBase):
 
 
 class Database:
-    def __init__(self, database_url: str):
-        if not database_url:
+    _instance: ClassVar["Database | None"] = None
+
+    @classmethod
+    def initialize(cls, url: str) -> "Database":
+        if cls._instance is None:
+            instance = object.__new__(cls)
+            instance._setup(url)
+            cls._instance = instance
+        return cls._instance
+
+    @classmethod
+    def get_instance(cls) -> "Database":
+        if cls._instance is None:
+            raise RuntimeError("Database.initialize() must be called first.")
+        return cls._instance
+
+    def _setup(self, url: str) -> None:
+        if not url:
             raise ValueError("DATABASE_URL is not set.")
-        self.engine = create_async_engine(database_url, echo=False)
+        self.engine = create_async_engine(url, echo=False)
         self.session_factory = async_sessionmaker(
-            self.engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
+            self.engine, class_=AsyncSession, expire_on_commit=False
         )
 
-    async def init(self) -> None:
-        try:
-            async with self.engine.begin() as conn:
-                await conn.execute(text("SELECT 1"))
-                logger.info("Database connection verified.")
-                await conn.run_sync(Base.metadata.create_all)
-                logger.info("Database initialization completed.")
-        except Exception:
-            logger.exception("Database initialization failed.")
-            raise
+    async def connect(self) -> None:
+        async with self.engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+        logger.info("Database connection verified.")
 
-    async def close(self) -> None:
+    async def disconnect(self) -> None:
         await self.engine.dispose()
         logger.info("Database connection closed.")
 
@@ -54,16 +59,3 @@ class Database:
             except Exception:
                 await session.rollback()
                 raise
-
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-
-@asynccontextmanager
-async def connect_db() -> AsyncGenerator[Database, None]:
-    db = Database(DATABASE_URL)
-    await db.init()
-    try:
-        yield db
-    finally:
-        await db.close()

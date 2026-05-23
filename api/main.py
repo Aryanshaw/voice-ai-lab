@@ -1,45 +1,76 @@
-"""FastAPI backend entrypoint."""
+"""FastAPI backend entrypoint — Voice Agent Lab."""
 
+import os
 from contextlib import asynccontextmanager
 
-import uvicorn
-from fastapi import FastAPI, HTTPException
+from dotenv import load_dotenv
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from config.db import connect_db
+from config.cache import RedisManager
+from config.db import Database
 from config.logger import get_logger
+from core.exceptions import register_exception_handlers
 
+# Import all ORM models so SQLAlchemy can resolve relationships before mapper config
+import app.agent_configs.models  # noqa: F401
+import app.sessions.models       # noqa: F401
+import app.session_turns.models  # noqa: F401
+import app.metrics.models        # noqa: F401
+import app.llm_models.models     # noqa: F401
 
+from app.agent_configs.router import router as configs_router
+from app.llm_models.router import router as llm_models_router
+from app.llm_models.seeder import seed_if_empty
+from app.voices.router import router as voices_router
+from app.ws.router import router as ws_router
+
+load_dotenv(override=True)
 logger = get_logger(__name__)
 
-_db = None
+DATABASE_URL = os.getenv("DATABASE_URL", "")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global _db
-    async with connect_db() as db:
-        _db = db
-        logger.info("REST API startup complete.")
-        yield
-    _db = None
-    logger.info("REST API shutdown complete.")
+    db = Database.initialize(DATABASE_URL)
+    await db.connect()
+
+    redis = RedisManager.initialize(REDIS_URL)
+    await redis.connect()
+
+    await seed_if_empty(db)
+
+    _app.state.db = db
+    _app.state.redis = redis
+
+    logger.info("Voice Agent Lab startup complete.")
+    yield
+
+    await redis.disconnect()
+    await db.disconnect()
+    logger.info("Voice Agent Lab shutdown complete.")
 
 
-app = FastAPI(title="Backrooms Backend", lifespan=lifespan)
+app = FastAPI(title="Voice Agent Lab", lifespan=lifespan)
 
+register_exception_handlers(app)
 
-@app.get("/")
-async def root() -> dict:
-    return {"message": "Backrooms backend is running"}
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(configs_router)
+app.include_router(llm_models_router)
+app.include_router(voices_router)
+app.include_router(ws_router)
 
 
 @app.get("/health")
-async def health() -> dict:
-    if not _db:
-        raise HTTPException(status_code=503, detail="Database not ready")
+async def health():
     return {"status": "ok"}
-
-
-if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
-

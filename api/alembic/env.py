@@ -9,8 +9,13 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 from config.db import Base
+import app.agent_configs.models  # noqa: F401
+import app.sessions.models       # noqa: F401
+import app.session_turns.models  # noqa: F401
+import app.metrics.models        # noqa: F401
+import app.llm_models.models     # noqa: F401
 
-load_dotenv()
+load_dotenv(override=True)
 
 config = context.config
 
@@ -23,17 +28,6 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline() -> None:
-    """Run migrations in 'offline' mode.
-
-    This configures the context with just a URL
-    and not an Engine, though an Engine is acceptable
-    here as well.  By skipping the Engine creation
-    we don't even need a DBAPI to be available.
-
-    Calls to context.execute() here emit the given string to the
-    script output.
-
-    """
     url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
@@ -54,11 +48,6 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    """In this scenario we need to create an Engine
-    and associate a connection with the context.
-
-    """
-
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -72,8 +61,6 @@ async def run_async_migrations() -> None:
 
 
 def run_migrations_online() -> None:
-    """Run migrations in 'online' mode."""
-
     asyncio.run(run_async_migrations())
 
 

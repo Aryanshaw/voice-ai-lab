@@ -10,6 +10,12 @@ dependencies = [
     "asyncpg>=0.30",
     "python-dotenv>=1.0",
     "alembic>=1.14",
+    "sarvamai>=0.1.28",
+    "groq>=1.2.0",
+    "redis>=7.4.0",
+    "pydantic>=2.13.4",
+    "elevenlabs>=2.49.0",
+    "httpx>=0.28.1",
 ]
 
 [tool.uv]
