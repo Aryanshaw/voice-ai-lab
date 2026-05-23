@@ -1,0 +1,14 @@
+{
+  "name": "tvaram",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n api,client -c blue,green \"uv --directory api run uvicorn main:app --host 127.0.0.1 --port 8000 --reload\" \"pnpm --filter frontend dev\"",
+    "dev:api": "uv --directory api run uvicorn main:app --host 127.0.0.1 --port 8000 --reload",
+    "dev:client": "pnpm --filter frontend dev",
+    "build": "pnpm --filter frontend build",
+    "lint": "pnpm --filter frontend lint"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

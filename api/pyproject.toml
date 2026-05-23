@@ -1,0 +1,15 @@
+[project]
+name = "backrooms-server"
+version = "0.1.0"
+description = "Initial FastAPI backend scaffold"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "python-dotenv>=1.0",
+    "alembic>=1.14",
+]
+
+[tool.uv]
