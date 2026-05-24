@@ -16,6 +16,8 @@ dependencies = [
     "pydantic>=2.13.4",
     "elevenlabs>=2.49.0",
     "httpx>=0.28.1",
+    "openai>=2.38.0",
+    "anthropic>=0.104.1",
 ]
 
 [tool.uv]

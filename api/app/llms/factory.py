@@ -2,13 +2,17 @@
 
 from typing import ClassVar
 
+from .anthropic import AnthropicProvider
 from .base import BaseLLMProvider
 from .groq import GroqProvider
+from .openai import OpenAIProvider
 
 
 class LLMFactory:
     _registry: ClassVar[dict[str, type[BaseLLMProvider]]] = {
         "groq": GroqProvider,
+        "openai": OpenAIProvider,
+        "anthropic": AnthropicProvider,
     }
 
     @classmethod
