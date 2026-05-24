@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useWebsocket } from "@/hooks/useWebsocket";
 import { useSessionTurns } from "@/hooks/useSessions";
+import { useVoicePipeline } from "@/hooks/useVoicePipeline";
 
 export interface ChatMessage {
   id: string;
@@ -9,12 +10,13 @@ export interface ChatMessage {
   stt_ms?: number | null;
   llm_ms?: number | null;
   tts_ms?: number | null;
+  isTranscript?: boolean; // pending voice message, not yet confirmed
 }
 
 export function useSessionChat(sessionId: string, onTitleUpdate?: (title: string) => void) {
   const { sendMessage, subscribe, isConnected, isReconnecting } = useWebsocket();
   const { data: turns, isLoading: turnsLoading } = useSessionTurns(sessionId);
-  
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
@@ -23,6 +25,7 @@ export function useSessionChat(sessionId: string, onTitleUpdate?: (title: string
   const streamingIdRef = useRef<string | null>(null);
   const streamingContentRef = useRef<string>("");
   const loadedTurnsRef = useRef<string | null>(null);
+  const transcriptMsgIdRef = useRef<string | null>(null); // tracks the pending transcript bubble
 
   // Load past turns when switching to an existing session
   useEffect(() => {
@@ -51,6 +54,19 @@ export function useSessionChat(sessionId: string, onTitleUpdate?: (title: string
     loadedTurnsRef.current = null;
   }, [sessionId]);
 
+  const onProcessingDone = useCallback(() => {
+    // voice turn_complete already handled in the subscription below
+  }, []);
+
+  const voice = useVoicePipeline({ sessionId, sendMessage, onProcessingDone });
+
+  // Stop mic when switching away from voice mode
+  useEffect(() => {
+    if (mode !== "voice") {
+      voice.stopListening();
+    }
+  }, [mode]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Websocket subscriptions for streaming updates
   useEffect(() => {
     const unsubToken = subscribe("token", (msg: { content: string }) => {
@@ -65,21 +81,36 @@ export function useSessionChat(sessionId: string, onTitleUpdate?: (title: string
 
     const unsubComplete = subscribe(
       "turn_complete",
-      (msg: { llm_ms: number; turn_id: string }) => {
+      (msg: { stt_ms?: number; llm_ms: number; tts_ms?: number; turn_id: string }) => {
+        // Confirm transcript bubble → real user message
+        if (transcriptMsgIdRef.current) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === transcriptMsgIdRef.current ? { ...m, isTranscript: false } : m
+            )
+          );
+          transcriptMsgIdRef.current = null;
+        }
         setMessages((prev) =>
           prev.map((m) =>
             m.id === streamingIdRef.current
-              ? { ...m, llm_ms: msg.llm_ms }
+              ? { ...m, llm_ms: msg.llm_ms, stt_ms: msg.stt_ms ?? null, tts_ms: msg.tts_ms ?? null }
               : m
           )
         );
         streamingIdRef.current = null;
         streamingContentRef.current = "";
         setIsStreaming(false);
+        voice.notifyTurnComplete();
       }
     );
 
     const unsubError = subscribe("error", (msg: { message: string }) => {
+      // Remove pending transcript bubble on error
+      if (transcriptMsgIdRef.current) {
+        setMessages((prev) => prev.filter((m) => m.id !== transcriptMsgIdRef.current));
+        transcriptMsgIdRef.current = null;
+      }
       setMessages((prev) =>
         prev.map((m) =>
           m.id === streamingIdRef.current
@@ -90,6 +121,7 @@ export function useSessionChat(sessionId: string, onTitleUpdate?: (title: string
       streamingIdRef.current = null;
       streamingContentRef.current = "";
       setIsStreaming(false);
+      voice.notifyTurnComplete(); // reset voice state so operator can retry
     });
 
     const unsubTitle = subscribe(
@@ -101,13 +133,46 @@ export function useSessionChat(sessionId: string, onTitleUpdate?: (title: string
       }
     );
 
+    // Voice-specific events
+    const unsubTranscript = subscribe("transcript", (msg: { content: string }) => {
+      // Show what STT heard as a pending user bubble
+      const transcriptId = crypto.randomUUID();
+      const assistantId = crypto.randomUUID();
+      transcriptMsgIdRef.current = transcriptId;
+      streamingIdRef.current = assistantId;
+      streamingContentRef.current = "";
+      setIsStreaming(true);
+      setMessages((prev) => [
+        ...prev,
+        { id: transcriptId, role: "user", content: msg.content, isTranscript: true },
+        { id: assistantId, role: "assistant", content: "" },
+      ]);
+    });
+
+    const unsubAudioChunk = subscribe("audio_chunk", (msg: { data: string }) => {
+      voice.handleAudioChunk(msg.data);
+    });
+
+    const unsubTtsEnd = subscribe("tts_end", () => {
+      voice.handleTtsEnd();
+    });
+
+    // Server sends voice_reset when STT returned empty (silence/noise) — not an error
+    const unsubVoiceReset = subscribe("voice_reset", () => {
+      voice.notifyTurnComplete(); // back to "listening", no message added
+    });
+
     return () => {
       unsubToken();
       unsubComplete();
       unsubError();
       unsubTitle();
+      unsubTranscript();
+      unsubAudioChunk();
+      unsubTtsEnd();
+      unsubVoiceReset();
     };
-  }, [subscribe, sessionId, onTitleUpdate]);
+  }, [subscribe, sessionId, onTitleUpdate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleInputChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setInput(e.target.value);
@@ -156,5 +221,11 @@ export function useSessionChat(sessionId: string, onTitleUpdate?: (title: string
     turnsLoading,
     handleInputChange,
     handleSend,
+    // voice
+    vadState: voice.vadState,
+    audioLevel: voice.audioLevel,
+    micError: voice.micError,
+    startListening: voice.startListening,
+    stopListening: voice.stopListening,
   };
 }
