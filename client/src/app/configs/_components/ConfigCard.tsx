@@ -78,9 +78,13 @@ export function ConfigCard({ config, onDelete }: ConfigCardProps) {
         </Badge>
       </div>
 
-      {/* Start session — disabled until Phase 2 */}
+      {/* Start session */}
       <div className="mt-3">
-        <Button size="sm" className="h-7 w-full gap-1.5 text-xs cursor-pointer" disabled>
+        <Button
+          size="sm"
+          className="h-7 w-full gap-1.5 text-xs cursor-pointer"
+          onClick={() => router.push(`/configs/${config.id}`)}
+        >
           <PlayIcon className="size-3" />
           Start Session
         </Button>

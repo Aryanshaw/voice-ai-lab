@@ -1,6 +1,7 @@
 """Metric — ORM model and Pydantic schemas."""
 
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 class Metric(Base):
     __tablename__ = "metrics"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     config_id: Mapped[str] = mapped_column(
         String, ForeignKey("agent_configs.id", ondelete="CASCADE"), nullable=False
     )
@@ -29,7 +30,7 @@ class Metric(Base):
     stage: Mapped[str] = mapped_column(String(20), nullable=False)
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     error: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     config: Mapped["AgentConfig"] = relationship(back_populates="metrics")
     session: Mapped["Session | None"] = relationship(back_populates="metrics")

@@ -1,12 +1,12 @@
-"""WebSocket router — placeholder for Phase 2."""
+"""WebSocket router — global persistent connection."""
 
 from fastapi import APIRouter, WebSocket
+
+from .handler import ws_endpoint
 
 router = APIRouter(tags=["websocket"])
 
 
-@router.websocket("/ws/session/{config_id}")
-async def session_ws(config_id: str, websocket: WebSocket):
-    await websocket.accept()
-    await websocket.send_json({"type": "info", "message": "WebSocket endpoint — implemented in Phase 2"})
-    await websocket.close()
+@router.websocket("/ws")
+async def websocket_route(websocket: WebSocket):
+    await ws_endpoint(websocket)

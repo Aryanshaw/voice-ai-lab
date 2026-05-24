@@ -52,6 +52,7 @@ interface AgentConfigEditorProps {
   title: string;
   onSubmit: (data: ConfigCreate) => void;
   isSubmitting: boolean;
+  onCancel?: () => void;
 }
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -68,6 +69,7 @@ export function AgentConfigEditor({
   title,
   onSubmit,
   isSubmitting,
+  onCancel,
 }: AgentConfigEditorProps) {
   const router = useRouter();
   const { data: modelsMap = {} } = useLLMModels();
@@ -352,7 +354,7 @@ export function AgentConfigEditor({
           variant="outline"
           size="sm"
           className="cursor-pointer"
-          onClick={() => router.push('/configs')}
+          onClick={() => onCancel ? onCancel() : router.push('/configs')}
           disabled={isSubmitting}
         >
           Cancel

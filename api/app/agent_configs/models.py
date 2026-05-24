@@ -1,7 +1,7 @@
 """Agent Config — ORM model and Pydantic schemas."""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Float, String, Text
@@ -28,7 +28,7 @@ class AgentConfig(Base):
     model: Mapped[str] = mapped_column(String(100), nullable=False, default="groq/llama3-8b-8192")
     temperature: Mapped[float] = mapped_column(Float, nullable=False, default=0.7)
     voice_settings: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
-    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="config", cascade="all, delete-orphan")

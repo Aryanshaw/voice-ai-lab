@@ -36,7 +36,14 @@ class Database:
     def _setup(self, url: str) -> None:
         if not url:
             raise ValueError("DATABASE_URL is not set.")
-        self.engine = create_async_engine(url, echo=False)
+        self.engine = create_async_engine(
+            url,
+            echo=False,
+            pool_size=5,
+            max_overflow=2,
+            pool_recycle=120,
+            connect_args={"statement_cache_size": 0},
+        )
         self.session_factory = async_sessionmaker(
             self.engine, class_=AsyncSession, expire_on_commit=False
         )
@@ -56,6 +63,15 @@ class Database:
             try:
                 yield session
                 await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
+
+    @asynccontextmanager
+    async def readonly_session(self) -> AsyncGenerator[AsyncSession, None]:
+        async with self.session_factory() as session:
+            try:
+                yield session
             except Exception:
                 await session.rollback()
                 raise

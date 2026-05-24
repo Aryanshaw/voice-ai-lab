@@ -1,6 +1,7 @@
 """Session — ORM model and Pydantic schemas."""
 
-from datetime import datetime
+import uuid
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, String
@@ -20,11 +21,12 @@ if TYPE_CHECKING:
 class Session(Base):
     __tablename__ = "sessions"
 
-    id: Mapped[str] = mapped_column(String, primary_key=True)
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     config_id: Mapped[str] = mapped_column(
         String, ForeignKey("agent_configs.id", ondelete="CASCADE"), nullable=False
     )
-    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
 
@@ -35,9 +37,14 @@ class Session(Base):
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 
+class SessionCreate(BaseModel):
+    config_id: str
+
+
 class SessionResponse(BaseModel):
     id: str
     config_id: str
+    title: str | None
     started_at: datetime
     ended_at: datetime | None
     status: str

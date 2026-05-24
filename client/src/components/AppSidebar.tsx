@@ -82,7 +82,7 @@ export function AppSidebar() {
       {/* Brand */}
       <div
         className={cn(
-          'flex shrink-0 items-center border-b border-border py-3.5',
+          'flex shrink-0 items-center border-b border-border py-4',
           sidebarCollapsed ? 'justify-center px-2' : 'justify-between px-4'
         )}
       >

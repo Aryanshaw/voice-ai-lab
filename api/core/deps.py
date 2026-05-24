@@ -14,5 +14,11 @@ async def get_db_session(request: Request) -> AsyncGenerator[AsyncSession, None]
         yield session
 
 
+async def get_readonly_session(request: Request) -> AsyncGenerator[AsyncSession, None]:
+    db = request.app.state.db
+    async with db.readonly_session() as session:
+        yield session
+
+
 def get_redis(request: Request) -> RedisManager:
     return request.app.state.redis

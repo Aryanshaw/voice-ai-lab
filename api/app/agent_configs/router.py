@@ -3,7 +3,7 @@
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core.deps import get_db_session
+from core.deps import get_db_session, get_readonly_session
 from .handler import AgentConfigHandler
 from .models import ConfigCreate, ConfigUpdate, ConfigResponse
 
@@ -14,8 +14,12 @@ async def get_handler(db: AsyncSession = Depends(get_db_session)) -> AgentConfig
     return AgentConfigHandler(db)
 
 
+async def get_read_handler(db: AsyncSession = Depends(get_readonly_session)) -> AgentConfigHandler:
+    return AgentConfigHandler(db)
+
+
 @router.get("/", response_model=list[ConfigResponse])
-async def list_configs(handler: AgentConfigHandler = Depends(get_handler)):
+async def list_configs(handler: AgentConfigHandler = Depends(get_read_handler)):
     return await handler.list_configs()
 
 
@@ -25,7 +29,7 @@ async def create_config(body: ConfigCreate, handler: AgentConfigHandler = Depend
 
 
 @router.get("/{config_id}", response_model=ConfigResponse)
-async def get_config(config_id: str, handler: AgentConfigHandler = Depends(get_handler)):
+async def get_config(config_id: str, handler: AgentConfigHandler = Depends(get_read_handler)):
     return await handler.get_config(config_id)
 
 

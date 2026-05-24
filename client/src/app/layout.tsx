@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/providers/ThemeProvider";
 import { DevtoolsProvider } from "@/providers/DevtoolsProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { WebSocketProvider } from "@/providers/WebsocketProvider";
 import { AppSidebar } from "@/components/AppSidebar";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -40,6 +41,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <QueryProvider>
+            <WebSocketProvider>
             <DevtoolsProvider>
               {/* Sidebar + content layout — full viewport height, no scroll on root */}
               <div className="flex h-screen overflow-hidden">
@@ -50,6 +52,7 @@ export default function RootLayout({
                 </main>
               </div>
             </DevtoolsProvider>
+            </WebSocketProvider>
           </QueryProvider>
           <Toaster />
         </ThemeProvider>
