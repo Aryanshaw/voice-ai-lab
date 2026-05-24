@@ -10,21 +10,21 @@
 graph TB
     subgraph Browser
         UI[Next.js App]
-        VAD[VAD - @ricky0123/vad-web]
+        VAD[VAD ricky0123/vad-web]
         WS_CLIENT[WebSocket Client]
         AUDIO_OUT[Audio Playback]
     end
 
-    subgraph FastAPI Backend
+    subgraph Backend
         WS_EP[WebSocket /ws]
         REST[REST API]
-        PIPELINE[STT → LLM → TTS Pipeline]
+        PIPELINE[STT-LLM-TTS Pipeline]
     end
 
-    subgraph External Services
+    subgraph Services
         GROQ_LLM[Groq LLM]
         GROQ_STT[Groq Whisper STT]
-        SARVAM[Sarvam STT - Indian]
+        SARVAM[Sarvam STT Indian]
         ELEVEN[ElevenLabs TTS]
     end
 
@@ -33,19 +33,21 @@ graph TB
         REDIS[(Redis)]
     end
 
-    UI -->|text/audio| WS_CLIENT
+    UI -->|text or audio| WS_CLIENT
     VAD -->|voice segments| WS_CLIENT
-    WS_CLIENT <-->|WebSocket| WS_EP
-    UI <-->|HTTP| REST
+    WS_CLIENT -->|WebSocket| WS_EP
+    WS_EP -->|tokens and audio| WS_CLIENT
+    UI -->|HTTP| REST
+    REST -->|responses| UI
     WS_EP --> PIPELINE
     PIPELINE --> GROQ_LLM
     PIPELINE --> GROQ_STT
     PIPELINE --> SARVAM
     PIPELINE --> ELEVEN
-    PIPELINE -->|turns + metrics| PG
+    PIPELINE -->|turns and metrics| PG
     REST -->|CRUD| PG
     WS_EP -->|session state| REDIS
-    AUDIO_OUT <--|base64 mp3 chunks| WS_CLIENT
+    WS_CLIENT -->|mp3 chunks| AUDIO_OUT
 ```
 
 ---
