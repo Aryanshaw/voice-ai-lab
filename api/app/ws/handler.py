@@ -1,19 +1,22 @@
 """WebSocket pipeline handler.
 
-Text protocol (unchanged from Phase 2):
+Text protocol:
   Client → { "type": "message",     "session_id": "<uuid>", "content": "<text>" }
   Server → { "type": "token",        "content": "<token>" }  ×N
   Server → { "type": "turn_complete", "llm_ms": <int>, "turn_id": "<uuid>" }
   Server → { "type": "error",        "message": "<str>" }
 
-Voice protocol (Phase 3):
-  Client → { "type": "audio_chunk",  "session_id": "<uuid>", "data": "<b64>", "mime_type": "audio/webm" }  ×N
-  Client → { "type": "audio_end",    "session_id": "<uuid>" }
+Voice protocol:
+  Client → { "type": "audio_voice",  "session_id": "<uuid>", "data": "<b64>", "mime_type": "audio/wav" }
   Server → { "type": "transcript",   "content": "<text>" }
-  Server → { "type": "token",        "content": "<token>" }  ×N  (same as text)
+  Server → { "type": "token",        "content": "<token>" }  ×N
   Server → { "type": "audio_chunk",  "data": "<b64>" }  ×N  (mp3 frames)
   Server → { "type": "tts_end" }
   Server → { "type": "turn_complete", "stt_ms": <int>, "llm_ms": <int>, "tts_ms": <int>, "turn_id": "<uuid>" }
+
+Interrupt protocol (barge-in):
+  Client → { "type": "interrupt",    "session_id": "<uuid>" }
+  — cancels the current in-flight LLM/TTS task immediately
 """
 
 import asyncio
@@ -47,6 +50,10 @@ class ConnectionState:
     audio_buffers: dict[str, list[bytes]] = field(default_factory=dict)
     # Per-session mime type (set on first audio_chunk)
     audio_mime: dict[str, str] = field(default_factory=dict)
+    # Current in-flight LLM/TTS task — cancelled on interrupt or new message
+    current_task: asyncio.Task | None = None
+    # Lock protecting concurrent websocket sends from task + background tasks
+    send_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -75,6 +82,16 @@ async def _detect_locale(websocket: WebSocket) -> str:
         return "global"
 
 
+async def _safe_send(websocket: WebSocket, state: ConnectionState, data: dict) -> bool:
+    """Send JSON protected by lock. Returns False if connection is closed."""
+    try:
+        async with state.send_lock:
+            await websocket.send_json(data)
+        return True
+    except Exception:
+        return False
+
+
 async def _persist_metric(
     db_manager,
     config_id: str,
@@ -89,6 +106,7 @@ async def _persist_metric(
 async def _generate_session_title(
     db_manager,
     websocket: WebSocket,
+    state: ConnectionState,
     session_id: str,
     config_id: str,
     first_user_message: str,
@@ -118,7 +136,7 @@ async def _generate_session_title(
             title = "".join(chunks).strip().strip('"').strip("'")[:200]
             await _SessionCRUD(db).update(session_id, title=title)
 
-        await websocket.send_json({
+        await _safe_send(websocket, state, {
             "type": "session_title",
             "session_id": session_id,
             "title": title,
@@ -131,6 +149,7 @@ async def _generate_session_title(
 
 async def _run_llm(
     websocket: WebSocket,
+    state: ConnectionState,
     db_manager,
     session_id: str,
     content: str,
@@ -139,131 +158,145 @@ async def _run_llm(
     """Core LLM pipeline shared by text and voice paths.
 
     Streams tokens to client, persists turn, fires TTS if voice mode.
+    Handles asyncio.CancelledError cleanly (barge-in interrupt).
     """
-    async with db_manager.session() as db:
-        session = await SessionCRUD(db).get(session_id)
-        if not session:
-            await websocket.send_json({"type": "error", "message": "Session not found"})
-            return
+    try:
+        async with db_manager.session() as db:
+            session = await SessionCRUD(db).get(session_id)
+            if not session:
+                await _safe_send(websocket, state, {"type": "error", "message": "Session not found"})
+                return
 
-        config = await AgentConfigCRUD(db).get(session.config_id)
-        if not config:
-            await websocket.send_json({"type": "error", "message": "Config not found"})
-            return
+            config = await AgentConfigCRUD(db).get(session.config_id)
+            if not config:
+                await _safe_send(websocket, state, {"type": "error", "message": "Config not found"})
+                return
 
-        history, _ = await SessionTurnCRUD(db).list_by_session(session_id)
-        messages = [{"role": t.role, "content": t.content} for t in history]
-        messages.append({"role": "user", "content": content})
+            history, _ = await SessionTurnCRUD(db).list_by_session(session_id)
+            messages = [{"role": t.role, "content": t.content} for t in history]
+            messages.append({"role": "user", "content": content})
 
-        system_parts = []
-        if config.name:
-            system_parts.append(f"You are {config.name}.")
-        if config.description:
-            system_parts.append(config.description)
-        system_parts.append(config.system_prompt)
-        system_prompt = "\n\n".join(filter(None, system_parts))
+            system_parts = []
+            if config.name:
+                system_parts.append(f"You are {config.name}.")
+            if config.description:
+                system_parts.append(config.description)
+            system_parts.append(config.system_prompt)
+            system_prompt = "\n\n".join(filter(None, system_parts))
 
-        provider = LLMFactory.create(config.model, config.temperature)
-        logger.info(
-            "[PIPELINE] LLM start | session=%s model=%s history_turns=%d",
-            session_id, config.model, len(history),
-        )
-        t0 = time.monotonic()
-        token_chunks: list[str] = []
-
-        try:
-            async for token in provider.stream(messages, system_prompt, config.temperature):
-                token_chunks.append(token)
-                await websocket.send_json({"type": "token", "content": token})
-        except Exception as exc:
-            logger.error("[PIPELINE] LLM failed | session=%s error=%s", session_id, exc)
-            await websocket.send_json({"type": "error", "message": str(exc)})
-            return
-
-        llm_ms = int((time.monotonic() - t0) * 1000)
-        full_response = "".join(token_chunks)
-        logger.info(
-            "[PIPELINE] LLM complete | session=%s llm_ms=%d response_chars=%d response=%r",
-            session_id, llm_ms, len(full_response), full_response[:200],
-        )
-
-        # TTS: stream full response through ElevenLabs if voice_settings has a voice_id
-        tts_ms = 0
-        voice_settings: dict = config.voice_settings or {}
-        voice_id = voice_settings.get("voice_id", "")
-
-        if voice_id and stt_ms > 0:  # voice_id present + came via voice path
+            provider = LLMFactory.create(config.model, config.temperature)
             logger.info(
-                "[PIPELINE] TTS start | session=%s voice_id=%s model=%s text_chars=%d",
-                session_id, voice_id, voice_settings.get("model_id"), len(full_response),
+                "[PIPELINE] LLM start | session=%s model=%s history_turns=%d",
+                session_id, config.model, len(history),
             )
-            tts_provider = ElevenLabsTTSProvider.from_voice_settings(voice_settings)
-            t_tts = time.monotonic()
-            audio_chunk_count = 0
+            t0 = time.monotonic()
+            token_chunks: list[str] = []
+
             try:
-                async for audio_chunk in tts_provider.stream_sentence(full_response):
-                    audio_chunk_count += 1
-                    await websocket.send_json({
-                        "type": "audio_chunk",
-                        "data": base64.b64encode(audio_chunk).decode(),
-                    })
-                tts_ms = int((time.monotonic() - t_tts) * 1000)
-                logger.info(
-                    "[PIPELINE] TTS complete | session=%s tts_ms=%d audio_chunks=%d",
-                    session_id, tts_ms, audio_chunk_count,
-                )
+                async for token in provider.stream(messages, system_prompt, config.temperature):
+                    token_chunks.append(token)
+                    if not await _safe_send(websocket, state, {"type": "token", "content": token}):
+                        return
+            except asyncio.CancelledError:
+                logger.info("[PIPELINE] turn cancelled during LLM | session=%s", session_id)
+                return
             except Exception as exc:
-                logger.error("[PIPELINE] TTS failed | session=%s error=%s", session_id, exc)
-                # Non-fatal: operator still gets text response
+                logger.error("[PIPELINE] LLM failed | session=%s error=%s", session_id, exc)
+                await _safe_send(websocket, state, {"type": "error", "message": str(exc)})
+                return
 
-            await websocket.send_json({"type": "tts_end"})
-        elif stt_ms > 0 and not voice_id:
-            logger.warning(
-                "[PIPELINE] TTS skipped — no voice_id in config | session=%s config=%s",
-                session_id, session.config_id,
+            llm_ms = int((time.monotonic() - t0) * 1000)
+            full_response = "".join(token_chunks)
+            logger.info(
+                "[PIPELINE] LLM complete | session=%s llm_ms=%d response_chars=%d response=%r",
+                session_id, llm_ms, len(full_response), full_response[:200],
             )
 
-        turns_crud = SessionTurnCRUD(db)
-        await turns_crud.create(session_id, "user", content, stt_ms=stt_ms)
-        assistant_turn = await turns_crud.create(
-            session_id, "assistant", full_response, llm_ms=llm_ms, tts_ms=tts_ms
-        )
+            # TTS: stream full response if voice_id set and came via voice path
+            tts_ms = 0
+            voice_settings: dict = config.voice_settings or {}
+            voice_id = voice_settings.get("voice_id", "")
 
-        config_id = session.config_id
-        is_first_turn = len(history) == 0
+            if voice_id and stt_ms > 0:
+                logger.info(
+                    "[PIPELINE] TTS start | session=%s voice_id=%s model=%s text_chars=%d",
+                    session_id, voice_id, voice_settings.get("model_id"), len(full_response),
+                )
+                tts_provider = ElevenLabsTTSProvider.from_voice_settings(voice_settings)
+                t_tts = time.monotonic()
+                audio_chunk_count = 0
+                try:
+                    async for audio_chunk in tts_provider.stream_sentence(full_response):
+                        audio_chunk_count += 1
+                        if not await _safe_send(websocket, state, {
+                            "type": "audio_chunk",
+                            "data": base64.b64encode(audio_chunk).decode(),
+                        }):
+                            return
+                    tts_ms = int((time.monotonic() - t_tts) * 1000)
+                    logger.info(
+                        "[PIPELINE] TTS complete | session=%s tts_ms=%d audio_chunks=%d",
+                        session_id, tts_ms, audio_chunk_count,
+                    )
+                except asyncio.CancelledError:
+                    logger.info("[PIPELINE] turn cancelled during TTS | session=%s", session_id)
+                    return
+                except Exception as exc:
+                    logger.error("[PIPELINE] TTS failed | session=%s error=%s", session_id, exc)
+                    # Non-fatal: operator still gets text response
 
-    await websocket.send_json({
-        "type": "turn_complete",
-        "stt_ms": stt_ms,
-        "llm_ms": llm_ms,
-        "tts_ms": tts_ms,
-        "turn_id": assistant_turn.id,
-    })
+                if not await _safe_send(websocket, state, {"type": "tts_end"}):
+                    return
+            elif stt_ms > 0 and not voice_id:
+                logger.warning(
+                    "[PIPELINE] TTS skipped — no voice_id in config | session=%s config=%s",
+                    session_id, session.config_id,
+                )
 
-    asyncio.create_task(_persist_metric(db_manager, config_id, session_id, "llm", llm_ms))
-    if stt_ms > 0:
-        asyncio.create_task(_persist_metric(db_manager, config_id, session_id, "stt", stt_ms))
-    if tts_ms > 0:
-        asyncio.create_task(_persist_metric(db_manager, config_id, session_id, "tts", tts_ms))
+            turns_crud = SessionTurnCRUD(db)
+            await turns_crud.create(session_id, "user", content, stt_ms=stt_ms)
+            assistant_turn = await turns_crud.create(
+                session_id, "assistant", full_response, llm_ms=llm_ms, tts_ms=tts_ms
+            )
 
-    if is_first_turn:
-        asyncio.create_task(
-            _generate_session_title(db_manager, websocket, session_id, config_id, content)
-        )
+            config_id = session.config_id
+            is_first_turn = len(history) == 0
+
+        await _safe_send(websocket, state, {
+            "type": "turn_complete",
+            "stt_ms": stt_ms,
+            "llm_ms": llm_ms,
+            "tts_ms": tts_ms,
+            "turn_id": assistant_turn.id,
+        })
+
+        asyncio.create_task(_persist_metric(db_manager, config_id, session_id, "llm", llm_ms))
+        if stt_ms > 0:
+            asyncio.create_task(_persist_metric(db_manager, config_id, session_id, "stt", stt_ms))
+        if tts_ms > 0:
+            asyncio.create_task(_persist_metric(db_manager, config_id, session_id, "tts", tts_ms))
+
+        if is_first_turn:
+            asyncio.create_task(
+                _generate_session_title(db_manager, websocket, state, session_id, config_id, content)
+            )
+
+    except asyncio.CancelledError:
+        logger.info("[PIPELINE] turn cancelled before LLM start | session=%s", session_id)
 
 
 # ── message handlers ──────────────────────────────────────────────────────────
 
-async def _handle_message(websocket: WebSocket, data: dict) -> None:
-    """Text path — same as Phase 2."""
+async def _handle_message(websocket: WebSocket, state: ConnectionState, data: dict) -> None:
+    """Text path."""
     session_id = data.get("session_id")
     content = data.get("content", "").strip()
 
     if not session_id or not content:
-        await websocket.send_json({"type": "error", "message": "session_id and content required"})
+        await _safe_send(websocket, state, {"type": "error", "message": "session_id and content required"})
         return
 
-    await _run_llm(websocket, websocket.app.state.db, session_id, content, stt_ms=0)
+    await _run_llm(websocket, state, websocket.app.state.db, session_id, content, stt_ms=0)
 
 
 def _handle_audio_chunk(state: ConnectionState, data: dict) -> None:
@@ -292,43 +325,37 @@ async def _handle_audio_end(
     state: ConnectionState,
     data: dict,
 ) -> None:
-    """Voice path — STT → LLM + TTS."""
+    """Legacy chunked voice path — STT → LLM + TTS."""
     session_id = data.get("session_id")
     if not session_id:
-        await websocket.send_json({"type": "error", "message": "session_id required"})
+        await _safe_send(websocket, state, {"type": "error", "message": "session_id required"})
         return
 
     chunks = state.audio_buffers.pop(session_id, [])
     mime_type = state.audio_mime.pop(session_id, "audio/webm")
 
     if not chunks:
-        await websocket.send_json({"type": "error", "message": "No audio received"})
+        await _safe_send(websocket, state, {"type": "error", "message": "No audio received"})
         return
 
     audio_bytes = b"".join(chunks)
     db_manager = websocket.app.state.db
 
-    # STT
     try:
         stt_provider = STTFactory.create(state.locale)
         stt_result = await stt_provider.transcribe(audio_bytes, mime_type)
     except Exception as exc:
         logger.error("STT failed: %s", exc)
-        await websocket.send_json({"type": "error", "message": f"STT failed: {exc}"})
+        await _safe_send(websocket, state, {"type": "error", "message": f"STT failed: {exc}"})
         return
 
     if not stt_result.transcript:
-        await websocket.send_json({"type": "voice_reset", "reason": "empty_transcript"})
+        await _safe_send(websocket, state, {"type": "voice_reset", "reason": "empty_transcript"})
         return
 
-    # Send transcript so operator sees what was heard
-    await websocket.send_json({"type": "transcript", "content": stt_result.transcript})
+    await _safe_send(websocket, state, {"type": "transcript", "content": stt_result.transcript})
+    await _run_llm(websocket, state, db_manager, session_id, stt_result.transcript, stt_ms=stt_result.stt_ms)
 
-    # LLM + TTS (stt_ms > 0 signals voice path to run TTS)
-    await _run_llm(websocket, db_manager, session_id, stt_result.transcript, stt_ms=stt_result.stt_ms)
-
-
-# ── WS endpoint ───────────────────────────────────────────────────────────────
 
 async def _handle_audio_voice(
     websocket: WebSocket,
@@ -338,16 +365,16 @@ async def _handle_audio_voice(
     """Voice path — single base64 audio message from client."""
     session_id = data.get("session_id")
     b64_data = data.get("data", "")
-    mime_type = data.get("mime_type", "audio/webm")
+    mime_type = data.get("mime_type", "audio/wav")
 
     if not session_id or not b64_data:
-        await websocket.send_json({"type": "error", "message": "session_id and data required"})
+        await _safe_send(websocket, state, {"type": "error", "message": "session_id and data required"})
         return
 
     try:
         audio_bytes = base64.b64decode(b64_data)
     except Exception:
-        await websocket.send_json({"type": "error", "message": "Invalid base64 audio data"})
+        await _safe_send(websocket, state, {"type": "error", "message": "Invalid base64 audio data"})
         return
 
     logger.info(
@@ -357,7 +384,6 @@ async def _handle_audio_voice(
 
     db_manager = websocket.app.state.db
 
-    # ── STT ──────────────────────────────────────────────────────────────────
     stt_provider = STTFactory.create(state.locale)
     logger.info(
         "[PIPELINE] STT provider=%s | session=%s",
@@ -368,7 +394,7 @@ async def _handle_audio_voice(
         stt_result = await stt_provider.transcribe(audio_bytes, mime_type)
     except Exception as exc:
         logger.error("[PIPELINE] STT failed | session=%s error=%s", session_id, exc)
-        await websocket.send_json({"type": "error", "message": f"STT failed: {exc}"})
+        await _safe_send(websocket, state, {"type": "error", "message": f"STT failed: {exc}"})
         return
 
     logger.info(
@@ -378,12 +404,25 @@ async def _handle_audio_voice(
 
     if not stt_result.transcript:
         logger.info("[PIPELINE] empty transcript — voice_reset | session=%s", session_id)
-        await websocket.send_json({"type": "voice_reset", "reason": "empty_transcript"})
+        await _safe_send(websocket, state, {"type": "voice_reset", "reason": "empty_transcript"})
         return
 
-    await websocket.send_json({"type": "transcript", "content": stt_result.transcript})
-    await _run_llm(websocket, db_manager, session_id, stt_result.transcript, stt_ms=stt_result.stt_ms)
+    await _safe_send(websocket, state, {"type": "transcript", "content": stt_result.transcript})
+    await _run_llm(websocket, state, db_manager, session_id, stt_result.transcript, stt_ms=stt_result.stt_ms)
 
+
+async def _cancel_current_task(state: ConnectionState) -> None:
+    """Cancel in-flight LLM/TTS task and wait for it to finish."""
+    if state.current_task and not state.current_task.done():
+        state.current_task.cancel()
+        try:
+            await state.current_task
+        except asyncio.CancelledError:
+            pass
+    state.current_task = None
+
+
+# ── WS endpoint ───────────────────────────────────────────────────────────────
 
 async def ws_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
@@ -395,14 +434,34 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             data = await websocket.receive_json()
             msg_type = data.get("type")
 
-            if msg_type == "message":
-                await _handle_message(websocket, data)
-            elif msg_type == "audio_voice":
-                await _handle_audio_voice(websocket, state, data)
+            if msg_type == "interrupt":
+                # Barge-in: cancel current turn immediately
+                if state.current_task and not state.current_task.done():
+                    logger.info("[PIPELINE] interrupt received — cancelling current task")
+                    state.current_task.cancel()
+                    state.current_task = None
+
+            elif msg_type in ("message", "audio_voice", "audio_end"):
+                # Cancel any in-flight task before starting a new turn
+                await _cancel_current_task(state)
+
+                if msg_type == "message":
+                    state.current_task = asyncio.create_task(
+                        _handle_message(websocket, state, data)
+                    )
+                elif msg_type == "audio_voice":
+                    state.current_task = asyncio.create_task(
+                        _handle_audio_voice(websocket, state, data)
+                    )
+                elif msg_type == "audio_end":
+                    state.current_task = asyncio.create_task(
+                        _handle_audio_end(websocket, state, data)
+                    )
+
             elif msg_type == "audio_chunk":
-                _handle_audio_chunk(state, data)  # legacy chunked path
-            elif msg_type == "audio_end":
-                await _handle_audio_end(websocket, state, data)
+                _handle_audio_chunk(state, data)  # legacy chunked path — sync, no task needed
+
             # unknown types (ping, etc.) ignored silently
+
     except WebSocketDisconnect:
-        pass
+        await _cancel_current_task(state)

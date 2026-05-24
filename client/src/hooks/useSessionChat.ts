@@ -225,6 +225,7 @@ export function useSessionChat(sessionId: string, onTitleUpdate?: (title: string
     vadState: voice.vadState,
     audioLevel: voice.audioLevel,
     micError: voice.micError,
+    isTtsPlaying: voice.isTtsPlaying,
     startListening: voice.startListening,
     stopListening: voice.stopListening,
   };

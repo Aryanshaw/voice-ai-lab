@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { ArrowUp, Mic, MicOff, Loader2 } from "lucide-react";
+import { ArrowUp, Mic, MicOff, Loader2, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SessionTurnsSkeleton } from "@/components/SessionTurnsSkeleton";
 import { useSessionChat } from "@/hooks/useSessionChat";
@@ -14,6 +14,7 @@ interface SessionPanelProps {
 
 const VAD_LABEL: Record<VadState, string> = {
   idle: "Click mic to start",
+  initializing: "Initializing…",
   listening: "Listening…",
   recording: "Recording…",
   processing: "Processing…",
@@ -33,6 +34,7 @@ export function SessionPanel({ sessionId, onTitleUpdate }: SessionPanelProps) {
     vadState,
     audioLevel,
     micError,
+    isTtsPlaying,
     startListening,
     stopListening,
   } = useSessionChat(sessionId, onTitleUpdate);
@@ -90,34 +92,45 @@ export function SessionPanel({ sessionId, onTitleUpdate }: SessionPanelProps) {
           </div>
         ) : (
           <div className="space-y-3 max-w-3xl mx-auto">
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-              >
+            {messages.map((msg, idx) => {
+              const isLastAssistant =
+                msg.role === "assistant" &&
+                idx === messages.map((m) => m.role).lastIndexOf("assistant");
+              return (
                 <div
-                  className={`max-w-[72%] rounded-2xl px-4 py-2.5 text-sm transition-opacity ${
-                    msg.role === "user"
-                      ? `bg-primary text-primary-foreground ${msg.isTranscript ? "opacity-60" : ""}`
-                      : "bg-muted text-foreground"
-                  }`}
+                  key={msg.id}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                 >
-                  {msg.isTranscript && (
-                    <span className="text-[10px] opacity-60 block mb-1 flex items-center gap-1">
-                      <Mic className="inline size-2.5" /> transcript
-                    </span>
-                  )}
-                  <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                  {msg.role === "assistant" && (msg.stt_ms !== undefined || msg.llm_ms !== undefined || msg.tts_ms !== undefined) && (
-                    <div className="flex gap-2.5 mt-1.5 text-[10px] opacity-40">
-                      <span>stt {msg.stt_ms != null ? `${msg.stt_ms}ms` : "—"}</span>
-                      <span>llm {msg.llm_ms != null ? `${msg.llm_ms}ms` : "—"}</span>
-                      <span>tts {msg.tts_ms != null ? `${msg.tts_ms}ms` : "—"}</span>
-                    </div>
-                  )}
+                  <div
+                    className={`max-w-[72%] rounded-2xl px-4 py-2.5 text-sm transition-opacity ${
+                      msg.role === "user"
+                        ? `bg-primary text-primary-foreground ${msg.isTranscript ? "opacity-60" : ""}`
+                        : "bg-muted text-foreground"
+                    }`}
+                  >
+                    {msg.isTranscript && (
+                      <span className="text-[10px] opacity-60 block mb-1 flex items-center gap-1">
+                        <Mic className="inline size-2.5" /> transcript
+                      </span>
+                    )}
+                    <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                    {msg.role === "assistant" && isTtsPlaying && isLastAssistant && (
+                      <div className="flex items-center gap-1 mt-1.5">
+                        <Volume2 className="size-3 text-muted-foreground animate-pulse" />
+                        <span className="text-[10px] text-muted-foreground">Playing</span>
+                      </div>
+                    )}
+                    {msg.role === "assistant" && (msg.stt_ms !== undefined || msg.llm_ms !== undefined || msg.tts_ms !== undefined) && (
+                      <div className="flex gap-2.5 mt-1.5 text-[10px] opacity-40">
+                        <span>stt {msg.stt_ms != null ? `${msg.stt_ms}ms` : "—"}</span>
+                        <span>llm {msg.llm_ms != null ? `${msg.llm_ms}ms` : "—"}</span>
+                        <span>tts {msg.tts_ms != null ? `${msg.tts_ms}ms` : "—"}</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
             <div ref={bottomRef} />
           </div>
         )}
@@ -149,16 +162,16 @@ export function SessionPanel({ sessionId, onTitleUpdate }: SessionPanelProps) {
               {/* Mic button */}
               <button
                 onClick={handleMicToggle}
-                disabled={!isConnected || vadState === "processing"}
+                disabled={!isConnected || vadState === "processing" || vadState === "initializing"}
                 className={`cursor-pointer rounded-full p-4 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                   vadState === "idle"
                     ? "bg-muted hover:bg-muted/80"
-                    : vadState === "processing"
+                    : vadState === "processing" || vadState === "initializing"
                     ? "bg-muted"
                     : "bg-primary hover:bg-primary/90"
                 }`}
               >
-                {vadState === "processing" ? (
+                {vadState === "processing" || vadState === "initializing" ? (
                   <Loader2 className="size-5 text-muted-foreground animate-spin" />
                 ) : vadState === "idle" ? (
                   <MicOff className="size-5 text-muted-foreground" />
