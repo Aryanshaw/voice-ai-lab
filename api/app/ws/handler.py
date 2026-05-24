@@ -98,9 +98,10 @@ async def _persist_metric(
     session_id: str,
     stage: str,
     latency_ms: int,
+    error: bool = False,
 ) -> None:
     async with db_manager.session() as db:
-        await MetricCRUD(db).create(config_id, session_id, stage, latency_ms)
+        await MetricCRUD(db).create(config_id, session_id, stage, latency_ms, error=error)
 
 
 async def _generate_session_title(
@@ -201,8 +202,12 @@ async def _run_llm(
                 logger.info("[PIPELINE] turn cancelled during LLM | session=%s", session_id)
                 return
             except Exception as exc:
+                llm_ms = int((time.monotonic() - t0) * 1000)
                 logger.error("[PIPELINE] LLM failed | session=%s error=%s", session_id, exc)
                 await _safe_send(websocket, state, {"type": "error", "message": str(exc)})
+                asyncio.create_task(
+                    _persist_metric(db_manager, session.config_id, session_id, "llm", llm_ms, error=True)
+                )
                 return
 
             llm_ms = int((time.monotonic() - t0) * 1000)
@@ -242,7 +247,11 @@ async def _run_llm(
                     logger.info("[PIPELINE] turn cancelled during TTS | session=%s", session_id)
                     return
                 except Exception as exc:
+                    tts_err_ms = int((time.monotonic() - t_tts) * 1000)
                     logger.error("[PIPELINE] TTS failed | session=%s error=%s", session_id, exc)
+                    asyncio.create_task(
+                        _persist_metric(db_manager, session.config_id, session_id, "tts", tts_err_ms, error=True)
+                    )
                     # Non-fatal: operator still gets text response
 
                 if not await _safe_send(websocket, state, {"type": "tts_end"}):

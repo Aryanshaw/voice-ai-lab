@@ -57,6 +57,8 @@ class StageStats(BaseModel):
     p99: float
     avg: float
     count: int
+    error_count: int
+    error_rate: float  # 0.0–1.0
 
 
 class MetricsSummaryResponse(BaseModel):

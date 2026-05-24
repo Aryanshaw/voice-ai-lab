@@ -1,6 +1,6 @@
 """Metric CRUD."""
 
-from sqlalchemy import func, select, text
+from sqlalchemy import case, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config.logger import get_logger
@@ -60,6 +60,7 @@ class MetricCRUD:
                     func.percentile_cont(0.99).within_group(Metric.latency_ms.asc()).label("p99"),
                     func.avg(Metric.latency_ms).label("avg"),
                     func.count(Metric.id).label("count"),
+                    func.sum(case((Metric.error == True, 1), else_=0)).label("error_count"),
                 )
                 .where(Metric.config_id == config_id)
                 .group_by(Metric.stage)
@@ -74,6 +75,8 @@ class MetricCRUD:
                     p99=round(float(row.p99 or 0), 1),
                     avg=round(float(row.avg or 0), 1),
                     count=row.count,
+                    error_count=int(row.error_count or 0),
+                    error_rate=round(int(row.error_count or 0) / row.count, 3) if row.count else 0.0,
                 )
                 for row in rows
             ]

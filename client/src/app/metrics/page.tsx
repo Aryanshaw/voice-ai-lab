@@ -68,9 +68,14 @@ function StageCard({ stage }: { stage: StageStats }) {
         ))}
       </div>
 
-      <div className="mt-3 pt-2.5 border-t border-border/40 flex justify-between">
+      <div className="mt-3 pt-2.5 border-t border-border/40 flex justify-between items-center">
         <span className="text-[10px] text-muted-foreground/50">avg</span>
         <span className="text-sm font-mono font-semibold">{stage.avg}ms</span>
+        {stage.error_count > 0 && (
+          <span className="text-[10px] font-mono text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded">
+            {stage.error_count} err · {(stage.error_rate * 100).toFixed(1)}%
+          </span>
+        )}
       </div>
     </div>
   );
@@ -91,6 +96,7 @@ export default function MetricsPage() {
   }));
 
   const totalSamples = (summary?.stages ?? []).reduce((sum, s) => sum + s.count, 0);
+  const totalErrors = (summary?.stages ?? []).reduce((sum, s) => sum + s.error_count, 0);
   const llmStage = summary?.stages.find((s) => s.stage === "llm");
 
   return (
@@ -154,6 +160,13 @@ export default function MetricsPage() {
                 </div>
               </>
             )}
+            <div className="h-7 w-px bg-border" />
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-0.5">Errors</p>
+              <p className={`text-xl font-mono font-semibold ${totalErrors > 0 ? "text-red-500" : "text-muted-foreground"}`}>
+                {totalErrors}
+              </p>
+            </div>
           </div>
         )}
 

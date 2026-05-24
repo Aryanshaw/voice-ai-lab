@@ -7,6 +7,8 @@ export interface StageStats {
   p99: number;
   avg: number;
   count: number;
+  error_count: number;
+  error_rate: number;
 }
 
 export interface MetricsSummary {
