@@ -66,6 +66,8 @@ Edit `api/.env`:
 ```env
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/voicelab
 GROQ_API_KEY=<your-groq-key>
+OPENAI_API_KEY=<your-openai-key>
+ANTHROPIC_API_KEY=<your-anthropic-key>
 ELEVENLABS_API_KEY=<your-elevenlabs-key>
 SARVAM_API_KEY=<your-sarvam-key>          # optional, for Indian English STT
 REDIS_URL=redis://localhost:6379           # optional, defaults to this

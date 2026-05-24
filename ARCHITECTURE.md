@@ -324,6 +324,8 @@ Every turn stores `stt_ms`, `llm_ms`, `tts_ms` independently in both `session_tu
 |----------|----------|-------------|
 | `DATABASE_URL` | Yes | PostgreSQL async URL (`postgresql+asyncpg://...`) |
 | `GROQ_API_KEY` | Yes | Groq API key (LLM + Whisper STT) |
+| `OPENAI_API_KEY` | No | OpenAI API key (LLM) |
+| `ANTHROPIC_API_KEY` | No | Anthropic API key (LLM) |
 | `ELEVENLABS_API_KEY` | Yes | ElevenLabs TTS key |
 | `SARVAM_API_KEY` | No | Sarvam STT key (Indian English) |
 | `REDIS_URL` | No | Redis URL (default: `redis://localhost:6379`) |
