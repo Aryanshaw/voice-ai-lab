@@ -32,6 +32,23 @@ See [ARCHITECTURE.md](./ARCHITECTURE.md) for system design, data flow diagrams, 
 
 ---
 
+## Voice Pipeline
+
+Each voice turn runs through 4 stages:
+
+| Stage | Library / Service | Where |
+|-------|------------------|-------|
+| **VAD** | `@ricky0123/vad-web` (ONNX model) | Browser — detects speech, suppresses silence before sending audio |
+| **STT** | Sarvam `saarika:v2.5` (Indian English) / Groq `whisper-large-v3-turbo` (global) | Server — chosen at WebSocket connect time via client IP detection |
+| **LLM** | Groq / OpenAI / Anthropic — streaming | Server — model set per agent config, tokens streamed back immediately |
+| **TTS** | ElevenLabs `eleven_turbo_v2` — streaming | Server — called sentence-by-sentence as LLM tokens accumulate, audio chunks sent back as base64 mp3 |
+
+Flow: `mic → VAD → WebSocket → STT → LLM stream → TTS stream → WebSocket → Web Audio API`
+
+Barge-in: client sends `{type: "interrupt"}` → server cancels in-flight LLM + TTS tasks via asyncio cancellation.
+
+---
+
 ## Prerequisites
 
 - Python >= 3.11
