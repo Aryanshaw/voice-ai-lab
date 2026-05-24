@@ -23,6 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { InfoTooltip } from '@/components/ui/info-tooltip';
 import { useLLMModels } from '@/hooks/useLLMModels';
 import { useElevenLabsModels } from '@/hooks/useElevenLabsModels';
 import { VoicePicker } from './VoicePicker';
@@ -283,7 +284,13 @@ export function AgentConfigEditor({
 
           {/* 3. Voice settings — shrink-0, always visible at bottom */}
           <div className="shrink-0 border-t border-border px-6 py-4 flex flex-col gap-3">
-            <SectionLabel>Voice Settings</SectionLabel>
+            <div className="flex items-center gap-1">
+              <SectionLabel>Voice Settings</SectionLabel>
+              <InfoTooltip>
+                <p><span className="font-semibold">Stability</span> — Controls how consistent the voice sounds. <span className="font-medium">Low (near 0):</span> more expressive, emotional variation but may sound less controlled. <span className="font-medium">High (near 1):</span> more robotic and monotone, good for announcements.</p>
+                <p><span className="font-semibold">Similarity</span> — How closely the output matches the original voice. <span className="font-medium">Low (near 0):</span> voice deviates from the original, sounds more natural but may lose identity. <span className="font-medium">High (near 1):</span> faithful to the cloned voice but can sound unnatural if the source audio had artifacts.</p>
+              </InfoTooltip>
+            </div>
 
             {/* EL synthesis model */}
             <div className="flex items-center gap-3">

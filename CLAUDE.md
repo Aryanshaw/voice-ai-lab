@@ -63,3 +63,17 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
+
+**Whenever you have confusion, don't assume, ask. Don't hide confusion, surface it or ask the user directly.**
+
+---
+
+**Think like a senior engineer:**
+
+- Would a senior engineer say this is overcomplicated? If yes, simplify.
+- Would a senior engineer say this is unnecessary? If yes, remove it.
+- Would a senior engineer say this is unclear? If yes, clarify it.
+
+---
+
+**Remember: The goal is not to write code that works. The goal is to write code that is correct, simple, maintainable, and clearly communicates its intent, and most importantly it should be production ready.**

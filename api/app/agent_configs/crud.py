@@ -25,6 +25,7 @@ class AgentConfigCRUD:
         config = AgentConfig(
             id=str(uuid.uuid4()),
             name=data.name,
+            description=data.description,
             system_prompt=data.system_prompt,
             model=data.model,
             temperature=data.temperature,
@@ -40,6 +41,8 @@ class AgentConfigCRUD:
     async def update(self, config: AgentConfig, data: ConfigUpdate) -> AgentConfig:
         if data.name is not None:
             config.name = data.name
+        if data.description is not None:
+            config.description = data.description
         if data.system_prompt is not None:
             config.system_prompt = data.system_prompt
         if data.model is not None:
