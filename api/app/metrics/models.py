@@ -48,3 +48,17 @@ class MetricResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class StageStats(BaseModel):
+    stage: str
+    p50: float
+    p90: float
+    p99: float
+    avg: float
+    count: int
+
+
+class MetricsSummaryResponse(BaseModel):
+    config_id: str
+    stages: list[StageStats]

@@ -42,6 +42,7 @@ class Database:
             pool_size=5,
             max_overflow=2,
             pool_recycle=120,
+            pool_pre_ping=True,
             connect_args={"statement_cache_size": 0},
         )
         self.session_factory = async_sessionmaker(

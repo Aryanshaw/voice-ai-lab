@@ -192,18 +192,18 @@ export function AgentConfigEditor({
               <div className="h-full min-h-[200px] overflow-y-auto rounded-md border border-border bg-muted/30 p-3 text-xs">
                 <ReactMarkdown
                   components={{
-                    h1: ({node, ...props}) => <h1 className="text-lg font-bold mt-4 mb-2" {...props} />,
-                    h2: ({node, ...props}) => <h2 className="text-md font-bold mt-4 mb-2" {...props} />,
-                    h3: ({node, ...props}) => <h3 className="text-sm font-bold mt-3 mb-2" {...props} />,
-                    p: ({node, ...props}) => <p className="mb-2 leading-relaxed" {...props} />,
-                    ul: ({node, ...props}) => <ul className="list-disc pl-4 mb-2 space-y-1" {...props} />,
-                    ol: ({node, ...props}) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...props} />,
-                    li: ({node, ...props}) => <li className="" {...props} />,
-                    strong: ({node, ...props}) => <strong className="font-semibold" {...props} />,
-                    em: ({node, ...props}) => <em className="italic" {...props} />,
-                    pre: ({node, ...props}) => <pre className="bg-background border p-2 rounded-md overflow-x-auto mb-2" {...props} />,
-                    code: ({node, className, ...props}) => <code className={cn("font-mono text-[10px]", !className?.includes('language-') && "bg-background border px-1 py-0.5 rounded-sm", className)} {...props} />,
-                    blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-primary pl-3 italic text-muted-foreground mb-2" {...props} />
+                    h1: ({node, ...props}) => <h1 className="text-lg font-bold mt-4 mb-2" {...(props as any)} />,
+                    h2: ({node, ...props}) => <h2 className="text-md font-bold mt-4 mb-2" {...(props as any)} />,
+                    h3: ({node, ...props}) => <h3 className="text-sm font-bold mt-3 mb-2" {...(props as any)} />,
+                    p: ({node, ...props}) => <p className="mb-2 leading-relaxed" {...(props as any)} />,
+                    ul: ({node, ...props}) => <ul className="list-disc pl-4 mb-2 space-y-1" {...(props as any)} />,
+                    ol: ({node, ...props}) => <ol className="list-decimal pl-4 mb-2 space-y-1" {...(props as any)} />,
+                    li: ({node, ...props}) => <li className="" {...(props as any)} />,
+                    strong: ({node, ...props}) => <strong className="font-semibold" {...(props as any)} />,
+                    em: ({node, ...props}) => <em className="italic" {...(props as any)} />,
+                    pre: ({node, ...props}) => <pre className="bg-background border p-2 rounded-md overflow-x-auto mb-2" {...(props as any)} />,
+                    code: ({node, className, ...props}) => <code className={cn("font-mono text-[10px]", !className?.includes('language-') && "bg-background border px-1 py-0.5 rounded-sm", className)} {...(props as any)} />,
+                    blockquote: ({node, ...props}) => <blockquote className="border-l-2 border-primary pl-3 italic text-muted-foreground mb-2" {...(props as any)} />
                   }}
                 >
                   {form.system_prompt || '*No prompt provided*'}

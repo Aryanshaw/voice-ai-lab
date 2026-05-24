@@ -1,6 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { SessionService } from "@/services/session.service";
 
+export const allSessionsKey = () => ["sessions", "all"] as const;
+
+export function useAllSessions() {
+  return useQuery({
+    queryKey: allSessionsKey(),
+    queryFn: () => SessionService.listAll(),
+  });
+}
+
 export const configSessionsKey = (config_id: string) =>
   ["sessions", "config", config_id] as const;
 

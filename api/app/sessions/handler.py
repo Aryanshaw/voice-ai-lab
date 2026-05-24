@@ -23,6 +23,10 @@ class SessionHandler:
         session = await self.crud.create(config_id)
         return SessionResponse.model_validate(session)
 
+    async def list_all(self, skip: int = 0, limit: int = 50) -> list[SessionResponse]:
+        sessions = await self.crud.list_all(skip, limit)
+        return [SessionResponse.model_validate(s) for s in sessions]
+
     async def list_by_config(self, config_id: str) -> list[SessionResponse]:
         sessions = await self.crud.list_by_config(config_id)
         return [SessionResponse.model_validate(s) for s in sessions]

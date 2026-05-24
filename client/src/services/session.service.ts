@@ -9,6 +9,11 @@ interface PaginatedTurns {
 }
 
 export const SessionService = {
+  listAll: async (skip = 0, limit = 50): Promise<Session[]> => {
+    const res = await api.get("/api/sessions", { params: { skip, limit } });
+    return res.data;
+  },
+
   create: async (config_id: string): Promise<Session> => {
     const res = await api.post("/api/sessions", { config_id });
     return res.data;

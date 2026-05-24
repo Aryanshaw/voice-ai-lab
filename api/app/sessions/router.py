@@ -20,6 +20,15 @@ async def get_read_handler(db: AsyncSession = Depends(get_readonly_session)) -> 
     return SessionHandler(db)
 
 
+@router.get("", response_model=list[SessionResponse])
+async def list_all_sessions(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    handler: SessionHandler = Depends(get_read_handler),
+):
+    return await handler.list_all(skip, limit)
+
+
 @router.post("", response_model=SessionResponse)
 async def create_session(
     body: SessionCreate,

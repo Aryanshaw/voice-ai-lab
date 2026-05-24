@@ -175,7 +175,7 @@ export default function ConfigDetailPage({ params }: Props) {
         {activeTab === 'config' && config && (
           <AgentConfigEditor
             title="Edit Config"
-            defaultValues={config}
+            defaultValues={config as any}
             onSubmit={handleConfigApply}
             isSubmitting={updateConfig.isPending}
             onCancel={() => setActiveTab('chat')}

@@ -27,6 +27,16 @@ export function useSessionChat(sessionId: string, onTitleUpdate?: (title: string
   const loadedTurnsRef = useRef<string | null>(null);
   const transcriptMsgIdRef = useRef<string | null>(null); // tracks the pending transcript bubble
 
+  // Reset state when session changes
+  useEffect(() => {
+    setMessages([]);
+    setInput("");
+    setIsStreaming(false);
+    streamingIdRef.current = null;
+    streamingContentRef.current = "";
+    loadedTurnsRef.current = null;
+  }, [sessionId]);
+
   // Load past turns when switching to an existing session
   useEffect(() => {
     if (turns && loadedTurnsRef.current !== sessionId) {
@@ -43,16 +53,6 @@ export function useSessionChat(sessionId: string, onTitleUpdate?: (title: string
       );
     }
   }, [turns, sessionId]);
-
-  // Reset state when session changes
-  useEffect(() => {
-    setMessages([]);
-    setInput("");
-    setIsStreaming(false);
-    streamingIdRef.current = null;
-    streamingContentRef.current = "";
-    loadedTurnsRef.current = null;
-  }, [sessionId]);
 
   const onProcessingDone = useCallback(() => {
     // voice turn_complete already handled in the subscription below

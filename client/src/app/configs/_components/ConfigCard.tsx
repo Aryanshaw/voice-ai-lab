@@ -66,11 +66,11 @@ export function ConfigCard({ config, onDelete }: ConfigCardProps) {
       </div>
 
       {/* Model + temperature badges */}
-      <div className="mt-3 flex items-center gap-2">
-        <Badge variant="secondary" className="text-xs font-mono">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <Badge variant="secondary" className="text-xs font-mono shrink-0">
           {provider}
         </Badge>
-        <Badge variant="outline" className="text-xs font-mono">
+        <Badge variant="outline" className="text-xs font-mono truncate max-w-full">
           {model}
         </Badge>
         <Badge variant="outline" className="text-xs">

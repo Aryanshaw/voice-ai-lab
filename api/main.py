@@ -22,6 +22,7 @@ import app.llm_models.models     # noqa: F401
 from app.agent_configs.router import router as configs_router
 from app.llm_models.router import router as llm_models_router
 from app.llm_models.seeder import seed_if_empty
+from app.metrics.router import router as metrics_router
 from app.sessions.router import router as sessions_router
 from app.voices.router import router as voices_router
 from app.ws.router import router as ws_router
@@ -68,6 +69,7 @@ app.add_middleware(
 
 app.include_router(configs_router)
 app.include_router(llm_models_router)
+app.include_router(metrics_router)
 app.include_router(sessions_router)
 app.include_router(voices_router)
 app.include_router(ws_router)

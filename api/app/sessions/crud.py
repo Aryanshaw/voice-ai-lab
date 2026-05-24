@@ -57,3 +57,16 @@ class SessionCRUD:
         except Exception as e:
             logger.exception(f"error in list_by_config: {e}")
             raise
+
+    async def list_all(self, skip: int = 0, limit: int = 50) -> list[Session]:
+        try:
+            result = await self.db.execute(
+                select(Session)
+                .order_by(Session.started_at.desc())
+                .offset(skip)
+                .limit(limit)
+            )
+            return list(result.scalars().all())
+        except Exception as e:
+            logger.exception(f"error in list_all: {e}")
+            raise
