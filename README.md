@@ -62,7 +62,13 @@ Barge-in: client sends `{type: "interrupt"}` → server cancels in-flight LLM + 
 
 ## Setup
 
-### 1. Clone and install
+### 1. Run setup script
+
+```bash
+./setup.sh
+```
+
+### 2. Clone and install
 
 ```bash
 # Install Python dependencies
@@ -72,11 +78,15 @@ uv sync --directory api
 pnpm install
 ```
 
-### 2. Configure environment
+### 3. Configure environment
 
 ```bash
 cp api/.env.example api/.env
 ```
+
+Creates `.env` files, installs all dependencies, and runs DB migrations.
+
+### 4. Fill in API keys
 
 Edit `api/.env`:
 
@@ -98,7 +108,7 @@ NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-### 3. Database migrations
+### 5. Database migrations
 
 ```bash
 # Apply all migrations
@@ -111,7 +121,7 @@ uv --directory api run alembic revision --autogenerate -m "description"
 uv --directory api run alembic downgrade -1
 ```
 
-### 4. Start Redis
+### 6. Start Redis
 
 ```bash
 redis-server
